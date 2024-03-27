@@ -36,13 +36,14 @@ from .cases import test_cases
 from arosics import COREG_LOCAL
 from geoarray import GeoArray
 
+
 class COREG_LOCAL_init(unittest.TestCase):
     """Test case on object initialization of COREG_LOCAL."""
 
     def setUp(self):
-        self.ref_path = test_cases["INTER1"]["ref_path"]
-        self.tgt_path = test_cases["INTER1"]["tgt_path"]
-        self.coreg_kwargs = test_cases["INTER1"]["kwargs_local"]
+        self.ref_path = test_cases['INTER1']['ref_path']
+        self.tgt_path = test_cases['INTER1']['tgt_path']
+        self.coreg_kwargs = test_cases['INTER1']['kwargs_local']
 
     def test_coreg_init_from_disk(self):
         self.CRL = COREG_LOCAL(self.ref_path, self.tgt_path, **self.coreg_kwargs)
@@ -67,13 +68,13 @@ class CompleteWorkflow_INTER1_S2A_S2A(unittest.TestCase):
     """
 
     def setUp(self):
-        self.ref_path = test_cases["INTER1"]["ref_path"]
-        self.tgt_path = test_cases["INTER1"]["tgt_path"]
-        self.coreg_kwargs = test_cases["INTER1"]["kwargs_local"]
+        self.ref_path = test_cases['INTER1']['ref_path']
+        self.tgt_path = test_cases['INTER1']['tgt_path']
+        self.coreg_kwargs = test_cases['INTER1']['kwargs_local']
 
     def tearDown(self):
         """Delete output."""
-        dir_out = os.path.dirname(self.coreg_kwargs["path_out"])
+        dir_out = os.path.dirname(self.coreg_kwargs['path_out'])
         if os.path.isdir(dir_out):
             shutil.rmtree(dir_out)
 
@@ -87,21 +88,18 @@ class CompleteWorkflow_INTER1_S2A_S2A(unittest.TestCase):
         # test tie point grid visualization
         with warnings.catch_warnings():
             warnings.filterwarnings(
-                "ignore",
-                category=UserWarning,
-                message="Matplotlib is currently using agg, " "which is a non-GUI backend, so cannot show the figure.",
-            )
+                'ignore', category=UserWarning, message='Matplotlib is currently using agg, '
+                                                        'which is a non-GUI backend, so cannot show the figure.')
             CRL.view_CoRegPoints(hide_filtered=True)
             CRL.view_CoRegPoints(hide_filtered=False)
-            CRL.view_CoRegPoints(shapes2plot="vectors")
+            CRL.view_CoRegPoints(shapes2plot='vectors')
             CRL.view_CoRegPoints_folium()
 
         # test shift correction and output writer
         CRL.correct_shifts()
 
-        self.assertTrue(
-            os.path.exists(self.coreg_kwargs["path_out"]), "Output of local co-registration has not been written."
-        )
+        self.assertTrue(os.path.exists(self.coreg_kwargs['path_out']),
+                        'Output of local co-registration has not been written.')
 
     def test_calculation_of_tie_point_grid_float_coords(self):
         # NOTE: This does not test against unequaly sized output of get_image_windows_to_match().
@@ -126,7 +124,8 @@ class CompleteWorkflow_INTER1_S2A_S2A(unittest.TestCase):
 
     def test_calculation_of_tie_point_grid_noepsg(self):
         """Test local coregistration with a proj. other than LonLat and UTM and a WKT which has no EPSG code (FORCE)."""
-        wkt_noepsg = """
+        wkt_noepsg = \
+            """
             PROJCRS["BU MEaSUREs Lambert Azimuthal Equal Area - SA - V01",
                 BASEGEOGCRS["WGS 84",
                     DATUM["World Geodetic System 1984",
@@ -158,7 +157,7 @@ class CompleteWorkflow_INTER1_S2A_S2A(unittest.TestCase):
                         ORDER[2],
                         LENGTHUNIT["metre",1]]]
             """
-        wkt_noepsg = " ".join(wkt_noepsg.split())
+        wkt_noepsg = ' '.join(wkt_noepsg.split())
 
         # overwrite prj
         ref = GeoArray(self.ref_path)
@@ -198,7 +197,6 @@ class CompleteWorkflow_INTER1_S2A_S2A(unittest.TestCase):
         self.assertTrue(CRL.success)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     import pytest
-
     pytest.main()
