@@ -52,7 +52,7 @@ req = [
     'packaging',
     'pandas',
     'plotly',
-    'pyfftw',
+    # 'pyfftw',
     'pykrige',
     'pyproj>2.2.0',
     'py_tools_ds>=0.18.0',
