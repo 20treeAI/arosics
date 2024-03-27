@@ -27,7 +27,6 @@
 """Tests for the local co-registration module of AROSICS."""
 
 import unittest
-from multiprocessing import cpu_count
 import shutil
 import os
 import warnings
@@ -38,7 +37,6 @@ from .cases import test_cases
 from arosics import COREG_LOCAL
 from geoarray import GeoArray
 
-N_CPUS = cpu_count()
 class COREG_LOCAL_init(unittest.TestCase):
     """Test case on object initialization of COREG_LOCAL."""
 
