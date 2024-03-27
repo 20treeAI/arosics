@@ -24,6 +24,7 @@
 # limitations under the License.
 
 import os
+from functools import lru_cache
 import time
 import warnings
 from copy import copy
@@ -32,6 +33,7 @@ from typing import Iterable, Union, Tuple, List, Optional  # noqa F401
 # custom
 from osgeo import gdal
 import numpy as np
+import scipy
 
 from packaging.version import parse as parse_version
 try:
@@ -61,6 +63,29 @@ from py_tools_ds.geo.map_info import geotransform2mapinfo
 from py_tools_ds.io.vector.writer import write_shp
 
 __author__ = 'Daniel Scheffler'
+gdal.AllRegister()
+
+
+@lru_cache
+def prj_equal_cached(a,b):
+    return prj_equal(a,b)
+
+
+@lru_cache
+def verify_crs(a,b):
+    if a is None and b is None or a == b:
+        return
+    from pyproj import CRS
+    crs_ref = CRS.from_user_input(a)
+    crs_shift = CRS.from_user_input(b)
+
+    if not crs_ref.equals(crs_shift):
+        name_ref, name_shift = \
+            (crs_ref.name, crs_shift.name) if not crs_ref.name == crs_shift.name else (crs_ref.srs, crs_shift.srs)
+
+        raise RuntimeError(
+            'Input projections are not equal. Different projections are currently not supported. '
+            'Got %s vs. %s.' % (name_ref, name_shift))
 
 
 class GeoArray_CoReg(GeoArray):
@@ -105,8 +130,11 @@ class GeoArray_CoReg(GeoArray):
         # compute nodata mask and validate that it is not completely filled with nodata
         self.calc_mask_nodata(fromBand=self.band4match)  # this avoids that all bands have to be read
 
-        if True not in self.mask_nodata[:]:
-            raise RuntimeError(f'The {self.imName} passed to AROSICS only contains nodata values.')
+        if CoReg_params["validate_nonempty"]:
+            # compute nodata mask and validate that it is not completely filled with nodata
+            self.calc_mask_nodata(fromBand=self.band4match)  # this avoids that all bands have to be read
+            if not self.mask_nodata.any():
+                raise RuntimeError(f'The {self.imName} passed to AROSICS only contains nodata values.')
 
         # set footprint_poly
         given_footprint_poly = CoReg_params['footprint_poly_%s' % ('ref' if imID == 'ref' else 'tgt')]
@@ -179,6 +207,7 @@ class COREG(object):
                  data_corners_ref: list = None,
                  data_corners_tgt: list = None,
                  nodata: Tuple = (None, None),
+                 validate_nonempty: bool = True,
                  calc_corners: bool = True,
                  binary_ws: bool = True,
                  mask_baddata_ref: Union[GeoArray, str] = None,
@@ -358,7 +387,7 @@ class COREG(object):
             warnings.warn("The resampling algorithm 'average' causes sinus-shaped patterns in fft images that will "
                           "affect the precision of the calculated spatial shifts! It is highly recommended to "
                           "choose another resampling algorithm.")
-
+        self.validate_nonempty = validate_nonempty
         self.path_out = path_out  # updated by self.set_outpathes
         self.fmt_out = fmt_out
         self.out_creaOpt = out_crea_options
@@ -416,7 +445,6 @@ class COREG(object):
         self.deshift_results = None  # set by self.correct_shifts()
 
         # try:
-        gdal.AllRegister()
         self._check_and_handle_metaRotation()
         self._get_image_params()
         self._set_outpathes(im_ref, im_tgt)
@@ -555,18 +583,8 @@ class COREG(object):
         self.ref = GeoArray_CoReg(self.params, 'ref')
         self.shift = GeoArray_CoReg(self.params, 'shift')
 
-        if not prj_equal(self.ref.prj, self.shift.prj):
-            from pyproj import CRS
+        verify_crs(self.ref.prj, self.shift.prj)
 
-            crs_ref = CRS.from_user_input(self.ref.prj)
-            crs_shift = CRS.from_user_input(self.shift.prj)
-
-            name_ref, name_shift = \
-                (crs_ref.name, crs_shift.name) if not crs_ref.name == crs_shift.name else (crs_ref.srs, crs_shift.srs)
-
-            raise RuntimeError(
-                'Input projections are not equal. Different projections are currently not supported. '
-                'Got %s vs. %s.' % (name_ref, name_shift))
 
     def _get_overlap_properties(self) -> None:
         with warnings.catch_warnings():
@@ -609,7 +627,7 @@ class COREG(object):
 
     @property
     def are_pixGrids_equal(self):
-        return prj_equal(self.ref.prj, self.shift.prj) and \
+        return prj_equal_cached(self.ref.prj, self.shift.prj) and \
                is_coord_grid_equal(self.ref.gt, *self.shift.xygrid_specs, tolerance=1e-8)
 
     def equalize_pixGrids(self) -> None:
@@ -1057,7 +1075,7 @@ class COREG(object):
 
         # equalize pixel grids and projection of matchWin and otherWin (ONLY if grids are really different)
         if not (self.matchWin.xygrid_specs == self.otherWin.xygrid_specs and
-                prj_equal(self.matchWin.prj, self.otherWin.prj)):
+                prj_equal_cached(self.matchWin.prj, self.otherWin.prj)):
             self.otherWin.arr, self.otherWin.gt = warp_ndarray(self.otherWin.arr,
                                                                self.otherWin.gt,
                                                                self.otherWin.prj,
@@ -1171,8 +1189,8 @@ class COREG(object):
                     in_arr1 = im1[ymin:ymax, xmin:xmax].astype(precision)
 
             if self.fftw_works is False or fft_arr0 is None or fft_arr1 is None:
-                fft_arr0 = np.fft.fft2(in_arr0)
-                fft_arr1 = np.fft.fft2(in_arr1)
+                fft_arr0 = scipy.fft.fft2(in_arr0)
+                fft_arr1 = scipy.fft.fft2(in_arr1)
 
             # GeoArray(fft_arr0.astype(np.float32)).show(figsize=(15,15))
             # GeoArray(fft_arr1.astype(np.float32)).show(figsize=(15,15))
@@ -1189,13 +1207,13 @@ class COREG(object):
             if 'pyfft' in globals():
                 ifft_arr = pyfftw.FFTW(temp, np.empty_like(temp), axes=(0, 1), direction='FFTW_BACKWARD')()
             else:
-                ifft_arr = np.fft.ifft2(temp)
+                ifft_arr = scipy.fft.ifft2(temp)
             if self.v:
                 print('backward FFTW: %.2fs' % (time.time() - time0))
 
             cps = np.abs(ifft_arr)
             # scps = shifted cps  => shift the zero-frequency component to the center of the spectrum
-            scps = np.fft.fftshift(cps)
+            scps = scipy.fft.fftshift(cps)
             if self.v:
                 PLT.subplot_imshow([np.real(in_arr0).astype(np.uint16), np.real(in_arr1).astype(np.uint16),
                                     np.real(fft_arr0).astype(np.uint8), np.real(fft_arr1).astype(np.uint8), scps],
