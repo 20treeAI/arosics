@@ -377,6 +377,19 @@ class Tie_Point_Grid(object):
             [self.COREG_obj.ref.band4match])  # only sets geoArr._arr_cache; does not change number of bands
         self.shift.cache_array_subset([self.COREG_obj.shift.band4match])
 
+        from multiprocessing import shared_memory
+        a = self.ref.arr
+        shm = shared_memory.SharedMemory(create=True, size=a.nbytes)
+        b = np.ndarray(a.shape, dtype=a.dtype, buffer=shm.buf)
+        b[:] = a[:]
+        self.ref.arr = b
+
+        a = self.shift.arr
+        shm = shared_memory.SharedMemory(create=True, size=a.nbytes)
+        b = np.ndarray(a.shape, dtype=a.dtype, buffer=shm.buf)
+        b[:] = a[:]
+        self.shift.arr = b
+
         # get all variations of kwargs for coregistration
         list_coreg_kwargs = (self._get_coreg_kwargs(i, self.XY_mapPoints[i]) for i in GDF.index)  # generator
 
