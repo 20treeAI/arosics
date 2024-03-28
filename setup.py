@@ -29,10 +29,10 @@
 from setuptools import setup, find_packages
 
 
-with open('README.rst') as readme_file:
+with open("README.rst") as readme_file:
     readme = readme_file.read()
 
-with open('HISTORY.rst') as history_file:
+with open("HISTORY.rst") as history_file:
     history = history_file.read()
 
 version = {}
@@ -40,62 +40,59 @@ with open("arosics/version.py") as version_file:
     exec(version_file.read(), version)
 
 req = [
-    'cartopy',
-    'cmocean',
-    'folium>=0.6.0,!=0.12.0',
-    'gdal',
-    'geoarray>=0.15.0',
-    'geojson',
-    'geopandas',
-    'matplotlib',
-    'numpy',
-    'packaging',
-    'pandas',
-    'plotly',
+    "cartopy",
+    "cmocean",
+    "folium>=0.6.0,!=0.12.0",
+    # 'gdal',
+    "geoarray>=0.15.0",
+    "geojson",
+    "geopandas",
+    "matplotlib",
+    "numpy",
+    "packaging",
+    "pandas",
+    "plotly",
     # 'pyfftw',
-    'pykrige',
-    'pyproj>2.2.0',
-    'py_tools_ds>=0.18.0',
-    'scikit-image>=0.21.0',
-    'scikit-learn',
-    'scipy',
-    'shapely',
+    "pykrige",
+    "pyproj>2.2.0",
+    "py_tools_ds>=0.18.0",
+    "scikit-image>=0.21.0",
+    "scikit-learn",
+    "scipy",
+    "shapely",
 ]
 
-req_setup = [
-    'setuptools',
-    'setuptools-git'
-]
+req_setup = ["setuptools", "setuptools-git"]
 
-req_intplot = ['holoviews', 'ipython']
+req_intplot = ["holoviews", "ipython"]
 
-req_test = ['pytest', 'pytest-cov', 'pytest-reporter-html1', 'urlchecker'] + req_intplot
+req_test = ["pytest", "pytest-cov", "pytest-reporter-html1", "urlchecker"] + req_intplot
 
-req_doc = ['sphinx-argparse', 'sphinx_rtd_theme', 'sphinx-autodoc-typehints']
+req_doc = ["sphinx-argparse", "sphinx_rtd_theme", "sphinx-autodoc-typehints"]
 
-req_lint = ['flake8', 'pycodestyle', 'pydocstyle']
+req_lint = ["flake8", "pycodestyle", "pydocstyle"]
 
 req_dev = req_setup + req_test + req_doc + req_lint
 
 setup(
     author="Daniel Scheffler",
-    author_email='daniel.scheffler@gfz-potsdam.de',
+    author_email="daniel.scheffler@gfz-potsdam.de",
     classifiers=[
-        'Development Status :: 5 - Production/Stable',
-        'Intended Audience :: Science/Research',
-        'Topic :: Scientific/Engineering',
-        'License :: OSI Approved :: Apache Software License',
-        'Natural Language :: English',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
-        'Programming Language :: Python :: 3.10',
-        'Programming Language :: Python :: 3.11'
+        "Development Status :: 5 - Production/Stable",
+        "Intended Audience :: Science/Research",
+        "Topic :: Scientific/Engineering",
+        "License :: OSI Approved :: Apache Software License",
+        "Natural Language :: English",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
     description="An Automated and Robust Open-Source Image Co-Registration Software for Multi-Sensor Satellite Data",
     entry_points={
-        'console_scripts': [
-            'arosics=arosics.arosics_cli:main',
+        "console_scripts": [
+            "arosics=arosics.arosics_cli:main",
         ],
     },
     extras_require={
@@ -103,29 +100,29 @@ setup(
         "doc": req_doc,
         "test": req_test,
         "lint": req_lint,
-        "dev": req_dev
+        "dev": req_dev,
     },
     include_package_data=True,
     install_requires=req,
-    keywords=['arosics', 'image co-registration', 'geometric pre-processing', 'remote sensing', 'sensor fusion'],
+    keywords=["arosics", "image co-registration", "geometric pre-processing", "remote sensing", "sensor fusion"],
     license="Apache-2.0",
     long_description=readme,
-    long_description_content_type='text/x-rst',
-    name='arosics',
-    packages=find_packages(exclude=['tests*']),
+    long_description_content_type="text/x-rst",
+    name="arosics",
+    packages=find_packages(exclude=["tests*"]),
     project_urls={
         "Source code": "https://git.gfz-potsdam.de/danschef/arosics",
         "Issue Tracker": "https://git.gfz-potsdam.de/danschef/arosics/-/issues",
         "Documentation": "https://danschef.git-pages.gfz-potsdam.de/arosics/doc/",
         "Change log": "https://git.gfz-potsdam.de/danschef/arosics/-/blob/main/HISTORY.rst",
         "Algorithm paper": "https://www.mdpi.com/2072-4292/9/7/676",
-        "Zenodo": "https://zenodo.org/record/5093940"
+        "Zenodo": "https://zenodo.org/record/5093940",
     },
-    python_requires='>3.8',
+    python_requires=">3.8",
     setup_requires=req_setup,
-    test_suite='tests',
+    test_suite="tests",
     tests_require=req + req_test,
-    url='https://git.gfz-potsdam.de/danschef/arosics',
-    version=version['__version__'],
+    url="https://git.gfz-potsdam.de/danschef/arosics",
+    version=version["__version__"],
     zip_safe=False,
 )
