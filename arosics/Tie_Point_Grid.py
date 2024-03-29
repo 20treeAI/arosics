@@ -377,12 +377,11 @@ class Tie_Point_Grid(object):
             [self.COREG_obj.ref.band4match])  # only sets geoArr._arr_cache; does not change number of bands
         self.shift.cache_array_subset([self.COREG_obj.shift.band4match])
 
-        from multiprocessing import shared_memory
-        shm = shared_memory.SharedMemory(create=True, size=self.ref.arr.nbytes)
+        shm = multiprocessing.shared_memory.SharedMemory(create=True, size=self.ref.arr.nbytes)
         buffer = np.ndarray(self.ref.arr.shape, dtype=self.ref.arr.dtype, buffer=shm.buf)
         buffer[:] = self.ref.arr[:]
         self.ref.arr = buffer
-        shm = shared_memory.SharedMemory(create=True, size=self.shift.arr.nbytes)
+        shm = multiprocessing.shared_memory.SharedMemory(create=True, size=self.shift.arr.nbytes)
         buffer = np.ndarray(self.shift.arr.shape, dtype=self.shift.arr.dtype, buffer=shm.buf)
         buffer[:] = self.shift.arr[:]
         self.shift.arr = buffer
