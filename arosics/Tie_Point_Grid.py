@@ -377,7 +377,7 @@ class Tie_Point_Grid(object):
             shared_buffer_array = shared_buffer_array[:input_array.size].reshape(input_array.shape)
             shared_buffer_array[:] = input_array[:]
             return shared_buffer_array
-        
+
         self.ref.arr = create_shared_mem_ndarray(self.ref.arr)
         self.shift.arr = create_shared_mem_ndarray(self.shift.arr)
 
