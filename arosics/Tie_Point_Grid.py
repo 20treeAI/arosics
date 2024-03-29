@@ -298,7 +298,7 @@ class Tie_Point_Grid(object):
         CR_res = [win_sz_x, win_sz_y, CR.x_shift_px, CR.y_shift_px, CR.x_shift_map, CR.y_shift_map,
                   CR.vec_length_map, CR.vec_angle_deg, CR.ssim_orig, CR.ssim_deshifted, CR.ssim_improved,
                   CR.shift_reliability, last_err]
-
+        del CR
         return [coreg_kwargs['pointID']] + CR_res
 
     def _get_coreg_kwargs(self, pID, wp):
@@ -367,8 +367,10 @@ class Tie_Point_Grid(object):
 
         # ensure the input arrays for CoReg are in memory -> otherwise the code will get stuck in multiprocessing if
         # neighboured matching windows overlap during reading from disk!!
-        self.ref.cache_array_subset([self.COREG_obj.ref.band4match])  # only sets geoArr._arr_cache; does not change number of bands
-        self.shift.cache_array_subset([self.COREG_obj.shift.band4match])
+        # self.ref.cache_array_subset([self.COREG_obj.ref.band4match])  # only sets geoArr._arr_cache; does not change number of bands
+        # self.shift.cache_array_subset([self.COREG_obj.shift.band4match])
+        self.ref.to_mem()
+        self.shift.to_mem()
 
         def create_shared_mem_ndarray(input_array):
             shm = SharedMemory(create=True, size=input_array.nbytes)
