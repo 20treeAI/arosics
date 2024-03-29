@@ -378,17 +378,14 @@ class Tie_Point_Grid(object):
         self.shift.cache_array_subset([self.COREG_obj.shift.band4match])
 
         from multiprocessing import shared_memory
-        a = self.ref.arr
-        shm = shared_memory.SharedMemory(create=True, size=a.nbytes)
-        b = np.ndarray(a.shape, dtype=a.dtype, buffer=shm.buf)
-        b[:] = a[:]
-        self.ref.arr = b
-
-        a = self.shift.arr
-        shm = shared_memory.SharedMemory(create=True, size=a.nbytes)
-        b = np.ndarray(a.shape, dtype=a.dtype, buffer=shm.buf)
-        b[:] = a[:]
-        self.shift.arr = b
+        shm = shared_memory.SharedMemory(create=True, size=self.ref.arr.nbytes)
+        buffer = np.ndarray(self.ref.arr.shape, dtype=self.ref.arr.dtype, buffer=shm.buf)
+        buffer[:] = self.ref.arr[:]
+        self.ref.arr = buffer
+        shm = shared_memory.SharedMemory(create=True, size=self.shift.arr.nbytes)
+        buffer = np.ndarray(self.shift.arr.shape, dtype=self.shift.arr.dtype, buffer=shm.buf)
+        buffer[:] = self.shift.arr[:]
+        self.shift.arr = buffer
 
         # get all variations of kwargs for coregistration
         list_coreg_kwargs = (self._get_coreg_kwargs(i, self.XY_mapPoints[i]) for i in GDF.index)  # generator
