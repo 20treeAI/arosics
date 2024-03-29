@@ -25,7 +25,7 @@
 
 import collections
 import multiprocessing
-import multiprocessing.shared_memory
+from multiprocessing.shared_memory import SharedMemory
 import os
 import warnings
 from time import time, sleep
@@ -367,12 +367,11 @@ class Tie_Point_Grid(object):
 
         # ensure the input arrays for CoReg are in memory -> otherwise the code will get stuck in multiprocessing if
         # neighboured matching windows overlap during reading from disk!!
-        self.ref.cache_array_subset(
-            [self.COREG_obj.ref.band4match])  # only sets geoArr._arr_cache; does not change number of bands
+        self.ref.cache_array_subset([self.COREG_obj.ref.band4match])  # only sets geoArr._arr_cache; does not change number of bands
         self.shift.cache_array_subset([self.COREG_obj.shift.band4match])
 
         def create_shared_mem_ndarray(input_array):
-            shm = multiprocessing.shared_memory.SharedMemory(create=True, size=input_array.nbytes)
+            shm = SharedMemory(create=True, size=input_array.nbytes)
             shared_buffer_array = np.frombuffer(shm.buf, dtype=input_array.dtype)
             shared_buffer_array = shared_buffer_array[:input_array.size].reshape(input_array.shape)
             shared_buffer_array[:] = input_array[:]
