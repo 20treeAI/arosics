@@ -25,6 +25,7 @@
 
 import collections
 import multiprocessing
+import multiprocessing.shared_memory
 import os
 import warnings
 from time import time, sleep
@@ -286,18 +287,9 @@ class Tie_Point_Grid(object):
 
     @staticmethod
     def _get_spatial_shifts(coreg_kwargs):
-        # unpack
-        pointID = coreg_kwargs['pointID']
-        fftw_works = coreg_kwargs['fftw_works']
-        del coreg_kwargs['pointID'], coreg_kwargs['fftw_works']
-
-        # assertions
-        assert global_shared_imref is not None
-        assert global_shared_im2shift is not None
-
-        # run CoReg
-        CR = COREG(global_shared_imref, global_shared_im2shift, CPUs=1, **coreg_kwargs)
-        CR.fftw_works = fftw_works
+        kwargs = {k:v for k,v in coreg_kwargs.items() if k not in ("pointID", "fftw_works", "ref", "shift")}
+        CR = COREG(coreg_kwargs['ref'],  coreg_kwargs['shift'], CPUs=1, **kwargs)
+        CR.fftw_works = coreg_kwargs['fftw_works']
         CR.calculate_spatial_shifts()
 
         # fetch results
@@ -307,10 +299,12 @@ class Tie_Point_Grid(object):
                   CR.vec_length_map, CR.vec_angle_deg, CR.ssim_orig, CR.ssim_deshifted, CR.ssim_improved,
                   CR.shift_reliability, last_err]
 
-        return [pointID] + CR_res
+        return [coreg_kwargs['pointID']] + CR_res
 
     def _get_coreg_kwargs(self, pID, wp):
         return dict(
+            ref=self.ref,
+            shift=self.shift,
             pointID=pID,
             fftw_works=self.COREG_obj.fftw_works,
             wp=wp,
@@ -377,14 +371,15 @@ class Tie_Point_Grid(object):
             [self.COREG_obj.ref.band4match])  # only sets geoArr._arr_cache; does not change number of bands
         self.shift.cache_array_subset([self.COREG_obj.shift.band4match])
 
-        shm = multiprocessing.shared_memory.SharedMemory(create=True, size=self.ref.arr.nbytes)
-        buffer = np.ndarray(self.ref.arr.shape, dtype=self.ref.arr.dtype, buffer=shm.buf)
-        buffer[:] = self.ref.arr[:]
-        self.ref.arr = buffer
-        shm = multiprocessing.shared_memory.SharedMemory(create=True, size=self.shift.arr.nbytes)
-        buffer = np.ndarray(self.shift.arr.shape, dtype=self.shift.arr.dtype, buffer=shm.buf)
-        buffer[:] = self.shift.arr[:]
-        self.shift.arr = buffer
+        def create_shared_mem_ndarray(input_array):
+            shm = multiprocessing.shared_memory.SharedMemory(create=True, size=input_array.nbytes)
+            shared_buffer_array = np.frombuffer(shm.buf, dtype=input_array.dtype)
+            shared_buffer_array = shared_buffer_array[:input_array.size].reshape(input_array.shape)
+            shared_buffer_array[:] = input_array[:]
+            return shared_buffer_array
+        
+        self.ref.arr = create_shared_mem_ndarray(self.ref.arr)
+        self.shift.arr = create_shared_mem_ndarray(self.shift.arr)
 
         # get all variations of kwargs for coregistration
         list_coreg_kwargs = (self._get_coreg_kwargs(i, self.XY_mapPoints[i]) for i in GDF.index)  # generator
@@ -394,7 +389,7 @@ class Tie_Point_Grid(object):
             if not self.q:
                 cpus = self.CPUs if self.CPUs is not None else multiprocessing.cpu_count()
                 print("Calculating tie point grid (%s points) using %s CPU cores..." % (len(GDF), cpus))
-            with multiprocessing.Pool(self.CPUs, initializer=mp_initializer, initargs=(self.ref, self.shift)) as pool:
+            with multiprocessing.Pool(self.CPUs) as pool:
                 if self.q or not self.progress:
                     results = pool.map(self._get_spatial_shifts, list_coreg_kwargs)
                 else:
