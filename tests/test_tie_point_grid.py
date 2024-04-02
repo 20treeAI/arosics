@@ -92,7 +92,7 @@ class Test_Tie_Point_Grid(unittest.TestCase):
         self.assertIsInstance(stats_noOL, dict)
         self.assertIsInstance(stats_OL, dict)
         self.assertNotEqual(stats_noOL, stats_OL)
-    @unittest.skip
+    # @unittest.SkipTest
     def test_plot_shift_distribution(self):
         with warnings.catch_warnings():
             warnings.filterwarnings(
