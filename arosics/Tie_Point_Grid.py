@@ -282,6 +282,9 @@ class Tie_Point_Grid(object):
         CR_res = [win_sz_x, win_sz_y, CR.x_shift_px, CR.y_shift_px, CR.x_shift_map, CR.y_shift_map,
                   CR.vec_length_map, CR.vec_angle_deg, CR.ssim_orig, CR.ssim_deshifted, CR.ssim_improved,
                   CR.shift_reliability, last_err]
+        del CR
+        import gc
+        gc.collect()
 
         return [point_id] + CR_res
 
@@ -313,18 +316,17 @@ class Tie_Point_Grid(object):
         if self.max_points and len(GDF) > self.max_points:
             GDF = GDF.sample(self.max_points).copy()
 
-        # ensure the input arrays for CoReg are in memory -> otherwise the code will get stuck in multiprocessing if
-        # neighboured matching windows overlap during reading from disk!!
-        _ = self.COREG_obj.ref[self.COREG_obj.ref.band4match]
-        _ = self.COREG_obj.shift[self.COREG_obj.shift.band4match]
-
-        # equalize pixel grids in order to save warping time
+       # equalize pixel grids in order to save warping time
         if len(GDF) > 100:
             # NOTE: actually grid res should be also changed here because self.shift.xgsd changes and grid res is
             # connected to that
             self.COREG_obj.equalize_pixGrids()
             self.ref = self.COREG_obj.ref
             self.shift = self.COREG_obj.shift
+
+        # fully load into memory here. both objects only have 1 band. This is enforced by the COREG_obj instantiation in CoReg_local.py
+        self.ref.to_mem()
+        self.shift.to_mem() 
 
         # validate reference and target image inputs
         assert self.ref.footprint_poly  # this also checks for mask_nodata and nodata value
@@ -370,6 +372,11 @@ class Tie_Point_Grid(object):
 
             if self.progress and not self.q:
                 bar.print_progress(percent=(i + 1) / len(GDF) * 100)
+
+        self.ref.to_disk()
+        self.shift.to_disk()
+        self.COREG_obj.ref.to_disk()
+        self.COREG_obj.shift.to_disk()
 
         # merge results with GDF
         # NOTE: We use a pandas.DataFrame here because the geometry column is missing.
