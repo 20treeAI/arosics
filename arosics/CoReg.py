@@ -1208,11 +1208,11 @@ class COREG(object):
             if self.v:
                 print('forward FFTW: %.2fs' % (time.time() - time0))
 
-            eps = np.abs(fft_arr1).max() * 1e-15
+            eps = (fft_arr1_abs:=np.abs(fft_arr1)).max() * 1e-15
             # cps == cross-power spectrum of im0 and im2
 
             with np.errstate(invalid='ignore'):  # ignore RuntimeWarning: invalid value encountered in true_divide
-                temp = np.array(fft_arr0 * fft_arr1.conjugate()) / (np.abs(fft_arr0) * np.abs(fft_arr1) + eps)
+                temp = np.array(fft_arr0 * fft_arr1.conjugate()) / (np.abs(fft_arr0) * fft_arr1_abs + eps)
 
             time0 = time.time()
             if 'pyfft' in globals():
