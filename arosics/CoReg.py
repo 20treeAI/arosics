@@ -576,7 +576,10 @@ class COREG(object):
         with warnings.catch_warnings():
             # already warned in GeoArray_CoReg.__init__()
             warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*disjunct.*")
-
+            if len(self.ref.poly.exterior.coords) > 10:
+                self.ref.poly = self.ref.poly.simplify(1e-5, preserve_topology=True)  # around 1 m
+            if len(self.shift.poly.exterior.coords) > 10:
+                self.shift.poly = self.shift.poly.simplify(1e-5, preserve_topology=True)
             overlap_tmp = get_overlap_polygon(self.ref.poly, self.shift.poly, self.v)
 
         self.overlap_poly = overlap_tmp['overlap poly']  # has to be in reference projection
