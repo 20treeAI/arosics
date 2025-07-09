@@ -24,6 +24,7 @@
 # limitations under the License.
 
 import os
+import gc
 import warnings
 from time import time
 from typing import Optional
@@ -282,7 +283,6 @@ class Tie_Point_Grid(object):
         CR_res = [win_sz_x, win_sz_y, CR.x_shift_px, CR.y_shift_px, CR.x_shift_map, CR.y_shift_map,
                   CR.vec_length_map, CR.vec_angle_deg, CR.ssim_orig, CR.ssim_deshifted, CR.ssim_improved,
                   CR.shift_reliability, last_err]
-
         return [point_id] + CR_res
 
     def get_CoRegPoints_table(self):
@@ -351,8 +351,6 @@ class Tie_Point_Grid(object):
                     wp=self.XY_mapPoints[point_id],
                     ws=self.COREG_obj.win_size_XY,
                     resamp_alg_calc=self.rspAlg_calc,
-                    footprint_poly_ref=self.COREG_obj.ref.poly,
-                    footprint_poly_tgt=self.COREG_obj.shift.poly,
                     r_b4match=self.ref.band4match + 1,  # internally indexing from 0
                     s_b4match=self.shift.band4match + 1,  # internally indexing from 0
                     max_iter=self.COREG_obj.max_iter,
@@ -376,6 +374,7 @@ class Tie_Point_Grid(object):
         self.shift.to_disk()
         self.COREG_obj.ref.to_disk()
         self.COREG_obj.shift.to_disk()
+        gc.collect()
 
         # merge results with GDF
         # NOTE: We use a pandas.DataFrame here because the geometry column is missing.
@@ -1120,13 +1119,13 @@ class Tie_Point_Refiner(object):
                 # import here to avoid static TLS ImportError
                 from skimage.measure import ransac
                 from skimage.transform import AffineTransform
-
+                max_trials = 100 if src_coords.shape[0] > 50000 else 2000
                 model_robust, inliers = \
                     ransac((src_coords, est_coords),
                            AffineTransform,
                            min_samples=6,
                            residual_threshold=th,
-                           max_trials=2000,
+                           max_trials=max_trials,
                            stop_sample_num=int(
                                (min_inlier_percentage - self.rs_tolerance) /
                                100 * src_coords.shape[0]
