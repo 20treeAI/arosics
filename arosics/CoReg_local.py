@@ -325,12 +325,14 @@ class COREG_LOCAL(object):
 
         try:
             # inside of this class, only the match band is used. make objects smaller here.
-            if self.imref.bands > 1:
-                self.imref = self.imref.get_subset(zslice=slice(r_b4match-1, r_b4match))
-                r_b4match = 1
-            if self.im2shift.bands > 1:
-                self.im2shift = self.im2shift.get_subset(zslice=slice(r_b4match-1, r_b4match))
-                s_b4match = 1
+            # but only do this for small images, as it is memory-intensive
+            if np.sqrt(self.im2shift.rows * self.im2shift.cols) < 75000:
+                if self.imref.bands > 1:
+                    self.imref = self.imref.get_subset(zslice=slice(r_b4match-1, r_b4match))
+                    r_b4match = 1
+                if self.im2shift.bands > 1:
+                    self.im2shift = self.im2shift.get_subset(zslice=slice(r_b4match-1, r_b4match))
+                    s_b4match = 1
         
             # ignore_errors must be False because in case COREG init fails, coregistration for the whole scene fails
             self.COREG_obj = COREG(self.imref, self.im2shift,
@@ -354,6 +356,7 @@ class COREG_LOCAL(object):
                                    progress=self.progress,
                                    v=v,
                                    q=q,
+                                   validate_nonempty=False,
                                    ignore_errors=False)
         except Exception:
             warnings.warn('\nFirst attempt to check the functionality of co-registration failed. Check your '
