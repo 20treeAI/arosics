@@ -342,7 +342,7 @@ class Tie_Point_Grid(object):
         else:
             kw_parallel = dict(backend='loky', return_as='generator')
         total = len(GDF)
-        steps = total // 10000
+        steps = max(1, total // 10000)
         for i, res in enumerate(
             Parallel(n_jobs=self.CPUs, **kw_parallel)(
                 delayed(self._get_spatial_shifts)(
