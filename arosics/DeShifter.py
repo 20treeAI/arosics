@@ -33,6 +33,7 @@ from typing import Union
 # internal modules
 from geoarray import GeoArray
 from py_tools_ds.geo.map_info import mapinfo2geotransform, geotransform2mapinfo
+from py_tools_ds.geo.coord_trafo import mapXY2imXY, imXY2mapXY
 from py_tools_ds.geo.coord_grid import is_coord_grid_equal
 from py_tools_ds.geo.projection import prj_equal
 from py_tools_ds.geo.raster.reproject import warp_ndarray
@@ -371,23 +372,61 @@ class DESHIFTER(object):
 
         else:  # FIXME equal_prj==False ist noch NICHT implementiert
             """RESAMPLING NEEDED"""
-            # FIXME avoid reading the whole band if clip_extent is passed
+            extent = self._get_out_extent()
 
-            in_arr = self.im2shift[:, :, self.band2process] \
-                if self.band2process is not None and self.im2shift.ndim == 3 else self.im2shift[:]
+            # we need to load a larger area to account for shifts
+            # TODO: ideally, this should be based on the largest GCP shift expected
+            x_center = 0.5 * (extent[0] + extent[2])
+            y_center = 0.5 * (extent[1] + extent[3])
+            x_side = extent[2] - extent[0]
+            y_side = extent[3] - extent[1]
+            buffered_extent = (
+                x_center - x_side,
+                y_center - y_side,
+                x_center + x_side,
+                y_center + y_side
+            )
+
+            # Convert buffered map extent to image pixel coordinates for slicing
+            xmin, ymin, xmax, ymax = buffered_extent
+            col_start, row_start = mapXY2imXY((xmin, ymax), self.im2shift.geotransform)
+            col_stop, row_stop = mapXY2imXY((xmax, ymin), self.im2shift.geotransform)
+
+            # Round to integers and clamp to image boundaries to create a valid slice
+            row_start, row_stop = int(np.floor(row_start)), int(np.ceil(row_stop))
+            col_start, col_stop = int(np.floor(col_start)), int(np.ceil(col_stop))
+            row_start, col_start = max(0, row_start), max(0, col_start)
+            row_stop, col_stop = min(self.im2shift.shape[0], row_stop), min(self.im2shift.shape[1], col_stop)
+
+            # Slice the array using integer indices to get a raw data view
+            if self.band2process is not None and self.im2shift.ndim == 3:
+                in_arr = self.im2shift[row_start:row_stop, col_start:col_stop, self.band2process]
+            else:
+                in_arr = self.im2shift[row_start:row_stop, col_start:col_stop]
+
+            # Calculate the geotransform for the slice based on its top-left pixel
+            new_ul_x, new_ul_y = imXY2mapXY((col_start, row_start), self.im2shift.geotransform)
+            sliced_gt = (new_ul_x, self.im2shift.geotransform[1], 0.0, new_ul_y, 0.0, self.im2shift.geotransform[5])
+            sliced_prj = self.im2shift.projection
 
             if not self.GCPList:
-                # apply XY-shifts to input image gt 'shift_gt' in order to correct the shifts before warping
-                self.shift_gt[0], self.shift_gt[3] = self.updated_gt[0], self.updated_gt[3]
+                input_gt = list(sliced_gt)
+                # To apply the global shift correctly, we must calculate the new origin relative to the original, full-image geotransform.
+                # The shift is the difference between the original and updated geotransform origins.
+                original_gt = self.im2shift.geotransform
+                x_shift = self.updated_gt[0] - original_gt[0]
+                y_shift = self.updated_gt[3] - original_gt[3]
+                input_gt[0] += x_shift
+                input_gt[3] += y_shift
 
-            # get resampled array
-            out_arr, out_gt, out_prj = \
-                warp_ndarray(in_arr, self.shift_gt, self.shift_prj, self.ref_prj,
+            # Get resampled array
+            out_arr, out_gt, out_prj= \
+                warp_ndarray(in_arr, tuple(input_gt), sliced_prj, self.ref_prj,
                              rspAlg=_dict_rspAlg_rsp_Int[self.rspAlg],
                              in_nodata=self.nodata,
                              out_nodata=self.nodata,
                              out_gsd=self.out_gsd,
-                             out_bounds=self._get_out_extent(),  # always returns an extent snapped to the target grid
+                             out_bounds=extent,  # Always returns an extent snapped to the target grid
                              gcpList=self.GCPList,
                              # polynomialOrder=str(3),
                              # options='-refine_gcps 500 1.9',
@@ -399,6 +438,7 @@ class DESHIFTER(object):
                              CPUs=self.CPUs,
                              progress=self.progress,
                              q=self.q)
+        
 
             out_geoArr = GeoArray(out_arr, out_gt, out_prj, q=self.q)
             out_geoArr.nodata = self.nodata  # equals self.im2shift.nodata after __init__()
