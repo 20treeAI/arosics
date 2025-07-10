@@ -871,7 +871,6 @@ class COREG(object):
 
         self.win_pos_XY = wp
         self.win_size_XY = (int(self.win_size_XY[0]), int(self.win_size_XY[1])) if self.win_size_XY else (512, 512)
-
     def _get_clip_window_properties(self) -> None:
         """Calculate all properties of the matching window and the other window.
 
@@ -961,10 +960,12 @@ class COREG(object):
         # in case after enlarging the 'other window', it gets too large for the overlap area
         # -> shrink match window and recompute smallest possible other window until everything is fine
         t_start = time.time()
+        max_shrink = min(matchBox.imDimsYX) // 2  # maximum shrink possible
+        shrink_step = max_shrink if max_shrink > 0 else 1
         while not otherBox.mapPoly.within(overlapWin.mapPoly):
             xLarger, yLarger = otherBox.is_larger_DimXY(overlapWin.boundsIm)
-            matchBox.buffer_imXY(-1 if xLarger else 0,
-                                 -1 if yLarger else 0)
+            matchBox.buffer_imXY(-shrink_step if xLarger else 0,
+                                 -shrink_step if yLarger else 0)
             previous_area = otherBox.mapPoly.area
             otherBox.boxImYX = \
                 get_smallest_boxImYX_that_contains_boxMapYX(
@@ -972,6 +973,9 @@ class COREG(object):
                     otherBox.gt,
                     tolerance_ndigits=5  # avoids float coordinate rounding issues
                 )
+            # If still not within, reduce shrink_step
+            if not otherBox.mapPoly.within(overlapWin.mapPoly) and shrink_step > 1:
+                shrink_step = max(1, shrink_step // 2)
 
             if previous_area == otherBox.mapPoly.area or \
                time.time() - t_start > 1.5:
