@@ -990,8 +990,7 @@ class COREG(object):
 
         # output validation
         for winBox in [matchBox, otherBox]:
-            if winBox.imDimsYX[0] < 16 or \
-               winBox.imDimsYX[1] < 16:
+            if min(winBox.imDimsYX) < 16:
                 self._handle_error(
                     RuntimeError("One of the input images does not have sufficient gray value information "
                                  "(non-no-data values) for placing a matching window at the position %s. "
