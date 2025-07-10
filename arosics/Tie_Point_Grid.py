@@ -341,7 +341,8 @@ class Tie_Point_Grid(object):
             kw_parallel = dict(backend='multiprocessing', return_as='list')
         else:
             kw_parallel = dict(backend='loky', return_as='generator')
-
+        total = len(GDF)
+        steps = total // 10000
         for i, res in enumerate(
             Parallel(n_jobs=self.CPUs, **kw_parallel)(
                 delayed(self._get_spatial_shifts)(
@@ -367,8 +368,8 @@ class Tie_Point_Grid(object):
         ):
             results.append(res)
 
-            if self.progress and not self.q:
-                bar.print_progress(percent=(i + 1) / len(GDF) * 100)
+            if self.progress and not self.q and i % steps == 0:
+                bar.print_progress(percent=(i + 1) / total * 100)
 
         self.ref.to_disk()
         self.shift.to_disk()
