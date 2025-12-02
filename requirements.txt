@@ -17,3 +17,5 @@ scikit-image>=0.21.0
 scikit-learn
 scipy>=1.7.0
 shapely
+
+fonttools==4.60.2
