@@ -1115,11 +1115,10 @@ class COREG(object):
                 warn=True)
 
         # crop both windows to the same even dimensions
-        # NOTE: the crop is sized from the smaller of the two windows, so a warping result that came out a
-        #       pixel larger or smaller than the match window is equalized here. Everything downstream -
-        #       the cross power spectrum and the SSIM validation - requires identical shapes.
-        rows, cols = [i if i % 2 == 0 else i - 1
-                      for i in map(min, zip(self.matchWin.shape, self.otherWin.shape))]
+        # NOTE: sizing the crop from the smaller of the two windows equalizes a warping result that came
+        #       out a pixel larger or smaller than the match window. _calc_shifted_cross_power_spectrum
+        #       asserts that the two windows have the same shape.
+        rows, cols = self._common_even_shape(self.matchWin.shape, self.otherWin.shape)
         self.matchWin.arr, self.otherWin.arr = self.matchWin.arr[:rows, :cols], self.otherWin.arr[:rows, :cols]
         if self.matchWin.box.imDimsYX != self.matchBox.imDimsYX:
             self.matchBox = self.matchWin.box  # update matchBox
@@ -1127,6 +1126,14 @@ class COREG(object):
 
         assert self.matchWin.arr is not None and self.otherWin.arr is not None, 'Creation of matching windows failed.'
         return True
+
+    @staticmethod
+    def _common_even_shape(shape_a: tuple, shape_b: tuple) -> Tuple[int, ...]:
+        """Return the largest even shape that both given shapes contain.
+
+        Each axis is the smaller of the two lengths, rounded down to an even number.
+        """
+        return tuple(i if i % 2 == 0 else i - 1 for i in map(min, zip(shape_a, shape_b)))
 
     @staticmethod
     def _shrink_winsize_to_binarySize(win_shape_YX: tuple,
@@ -1455,14 +1462,13 @@ class COREG(object):
             sciy.metrics.structural_similarity is not commutative for masked arrays
             This fixes that, by masking out nodata in either array in both.
 
-            Unequal input shapes are reduced to their common top-left overlap. A similarity measure over
-            the overlap is worth more than an exception, which would abort the whole tie point grid.
+            Both inputs must have the same shape. Cropping them to their overlap instead would return a
+            similarity measured over a different window than the caller asked for, and record it in the
+            tie point grid as if it were comparable to every other point's.
             """
             if a.shape != b.shape:
-                warnings.warn('SSIM input array shapes %s and %s are not equal. '
-                              'Comparing their common overlap instead.' % (a.shape, b.shape))
-                rows, cols = map(min, zip(a.shape, b.shape))
-                a, b = a[:rows, :cols], b[:rows, :cols]
+                raise RuntimeError('SSIM input arrays have shapes %s and %s at window position %s. '
+                                   'They must be equal.' % (a.shape, b.shape, str(self.matchBox.wp)))
 
             a_masked = np.ma.masked_equal(a, a_nodata)
             b_masked = np.ma.masked_equal(b, b_nodata)
@@ -1514,9 +1520,9 @@ class COREG(object):
                 warnings.warn('SSIM input array shapes could not be equalized. SSIM calculation failed. '
                               'SSIM of the de-shifted target image is set to 0.')
                 self.ssim_deshifted = 0
-                # NOTE: self.matchWin was clipped above and no longer matches self.otherWin. Recording the
-                #       outcome here is what keeps the ssim_improved property from running this method a
-                #       second time against those two now inconsistent windows.
+                # NOTE: this path leaves self.matchWin clipped against self.matchBox, so it may no longer
+                #       have the shape of self.otherWin. Recording the outcome keeps the ssim_improved
+                #       property from recomputing the SSIM from those two windows.
                 self.ssim_improved = self.ssim_orig <= self.ssim_deshifted
 
                 return self.ssim_orig, self.ssim_deshifted
