@@ -1114,8 +1114,12 @@ class COREG(object):
                              'image shape is %s.' % (str(self.matchBox.wp), self.matchWin.shape, self.otherWin.shape)),
                 warn=True)
 
-        # check of odd dimensions of output images
-        rows, cols = [i if i % 2 == 0 else i - 1 for i in self.matchWin.shape]
+        # crop both windows to the same even dimensions
+        # NOTE: the crop is sized from the smaller of the two windows, so a warping result that came out a
+        #       pixel larger or smaller than the match window is equalized here. Everything downstream -
+        #       the cross power spectrum and the SSIM validation - requires identical shapes.
+        rows, cols = [i if i % 2 == 0 else i - 1
+                      for i in map(min, zip(self.matchWin.shape, self.otherWin.shape))]
         self.matchWin.arr, self.otherWin.arr = self.matchWin.arr[:rows, :cols], self.otherWin.arr[:rows, :cols]
         if self.matchWin.box.imDimsYX != self.matchBox.imDimsYX:
             self.matchBox = self.matchWin.box  # update matchBox
@@ -1450,7 +1454,16 @@ class COREG(object):
             """
             sciy.metrics.structural_similarity is not commutative for masked arrays
             This fixes that, by masking out nodata in either array in both.
+
+            Unequal input shapes are reduced to their common top-left overlap. A similarity measure over
+            the overlap is worth more than an exception, which would abort the whole tie point grid.
             """
+            if a.shape != b.shape:
+                warnings.warn('SSIM input array shapes %s and %s are not equal. '
+                              'Comparing their common overlap instead.' % (a.shape, b.shape))
+                rows, cols = map(min, zip(a.shape, b.shape))
+                a, b = a[:rows, :cols], b[:rows, :cols]
+
             a_masked = np.ma.masked_equal(a, a_nodata)
             b_masked = np.ma.masked_equal(b, b_nodata)
             a_masked.mask = b_masked.mask = np.logical_or(a_masked.mask, b_masked.mask)
@@ -1501,6 +1514,10 @@ class COREG(object):
                 warnings.warn('SSIM input array shapes could not be equalized. SSIM calculation failed. '
                               'SSIM of the de-shifted target image is set to 0.')
                 self.ssim_deshifted = 0
+                # NOTE: self.matchWin was clipped above and no longer matches self.otherWin. Recording the
+                #       outcome here is what keeps the ssim_improved property from running this method a
+                #       second time against those two now inconsistent windows.
+                self.ssim_improved = self.ssim_orig <= self.ssim_deshifted
 
                 return self.ssim_orig, self.ssim_deshifted
 
