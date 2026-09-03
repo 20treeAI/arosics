@@ -26,6 +26,7 @@
 import os
 import gc
 import warnings
+import traceback
 from time import time
 from typing import Optional
 from sys import platform
@@ -53,6 +54,14 @@ from .CoReg import GeoArray_CoReg  # noqa F401  # flake8 issue
 __author__ = 'Daniel Scheffler'
 
 
+class UnexpectedTiePointError(RuntimeError):
+    """An exception that escaped COREG instead of being tracked by it.
+
+    Carries its cause as formatted text: a tie point's result row is pickled back from a worker
+    process, and an exception whose __init__ takes more than one argument cannot be unpickled.
+    """
+
+
 class Tie_Point_Grid(object):
     """
     The 'Tie_Point_Grid' class applies the algorithm to detect spatial shifts to the overlap area of the input images.
@@ -64,6 +73,14 @@ class Tie_Point_Grid(object):
 
     See help(Tie_Point_Grid) for documentation!
     """
+
+    # Columns of one tie point's result row, in the order _get_spatial_shifts() returns them.
+    _RESULT_COLUMNS = ['POINT_ID', 'X_WIN_SIZE', 'Y_WIN_SIZE', 'X_SHIFT_PX', 'Y_SHIFT_PX', 'X_SHIFT_M',
+                       'Y_SHIFT_M', 'ABS_SHIFT', 'ANGLE', 'SSIM_BEFORE', 'SSIM_AFTER',
+                       'SSIM_IMPROVED', 'RELIABILITY', 'LAST_ERR']
+
+    # Share of points that must raise before a run is treated as broken rather than merely unmatchable.
+    _MAX_UNEXPECTED_ERROR_SHARE = 0.5
 
     def __init__(self,
                  COREG_obj: COREG,
@@ -272,18 +289,50 @@ class Tie_Point_Grid(object):
 
     @staticmethod
     def _get_spatial_shifts(imref, im2shift, point_id, **coreg_kwargs):
-        # run CoReg
-        CR = COREG(imref, im2shift, CPUs=1, **coreg_kwargs)
-        if CR.success in (True, None) and CR.ref_any_nodata in (True, None):
-            CR.calculate_spatial_shifts()
+        """Match a single tie point and return its result row, positionally aligned with _RESULT_COLUMNS.
 
-        # fetch results
-        last_err = CR.tracked_errors[-1] if CR.tracked_errors else None
-        win_sz_y, win_sz_x = CR.matchBox.imDimsYX if CR.matchBox else (None, None)
-        CR_res = [win_sz_x, win_sz_y, CR.x_shift_px, CR.y_shift_px, CR.x_shift_map, CR.y_shift_map,
-                  CR.vec_length_map, CR.vec_angle_deg, CR.ssim_orig, CR.ssim_deshifted, CR.ssim_improved,
-                  CR.shift_reliability, last_err]
+        A point whose matching raises is returned as a row without a match, carrying the exception in
+        LAST_ERR the same way a point that failed to match does.
+        """
+        try:
+            # run CoReg
+            CR = COREG(imref, im2shift, CPUs=1, **coreg_kwargs)
+            if CR.success in (True, None) and CR.ref_any_nodata in (True, None):
+                CR.calculate_spatial_shifts()
+
+            # fetch results
+            last_err = CR.tracked_errors[-1] if CR.tracked_errors else None
+            win_sz_y, win_sz_x = CR.matchBox.imDimsYX if CR.matchBox else (None, None)
+            CR_res = [win_sz_x, win_sz_y, CR.x_shift_px, CR.y_shift_px, CR.x_shift_map, CR.y_shift_map,
+                      CR.vec_length_map, CR.vec_angle_deg, CR.ssim_orig, CR.ssim_deshifted, CR.ssim_improved,
+                      CR.shift_reliability, last_err]
+        except MemoryError:
+            raise
+        except Exception as err:
+            warnings.warn('Matching tie point %s raised %s: %s. The point is recorded without a match.'
+                          % (point_id, type(err).__name__, err))
+            # every column but POINT_ID and LAST_ERR is unknown for a point that raised
+            CR_res = [None] * (len(Tie_Point_Grid._RESULT_COLUMNS) - 2) + \
+                     [UnexpectedTiePointError(traceback.format_exc())]
+
         return [point_id] + CR_res
+
+    def _report_unexpected_errors(self, GDF) -> None:
+        """Report tie points that raised, and raise when they dominate the grid.
+
+        A worker process's warning is easy to lose, so the count is reported from here. Above
+        _MAX_UNEXPECTED_ERROR_SHARE the cause is the run rather than the imagery, and an empty grid
+        would otherwise be indistinguishable from imagery that simply cannot be matched.
+        """
+        errors = [err for err in GDF.LAST_ERR if isinstance(err, UnexpectedTiePointError)]
+        if not errors:
+            return
+
+        message = ('%s of %s tie points raised an unexpected exception. First one:\n%s'
+                   % (len(errors), len(GDF), errors[0]))
+        if len(errors) > self._MAX_UNEXPECTED_ERROR_SHARE * len(GDF):
+            raise UnexpectedTiePointError(message)
+        warnings.warn(message)
 
     def get_CoRegPoints_table(self):
         assert self.XY_points is not None and self.XY_mapPoints is not None
@@ -380,16 +429,14 @@ class Tie_Point_Grid(object):
         # merge results with GDF
         # NOTE: We use a pandas.DataFrame here because the geometry column is missing.
         #       GDF.astype(...) fails with geopandas>0.6.0 if the geometry columns is missing.
-        records = DataFrame(results,
-                            columns=['POINT_ID', 'X_WIN_SIZE', 'Y_WIN_SIZE', 'X_SHIFT_PX', 'Y_SHIFT_PX', 'X_SHIFT_M',
-                                     'Y_SHIFT_M', 'ABS_SHIFT', 'ANGLE', 'SSIM_BEFORE', 'SSIM_AFTER',
-                                     'SSIM_IMPROVED', 'RELIABILITY', 'LAST_ERR'])
+        records = DataFrame(results, columns=self._RESULT_COLUMNS)
 
         # merge DataFrames
         GDF = GDF.merge(records, on='POINT_ID', how="inner")
         GDF = GDF.fillna(self.outFillVal)
 
         n_matches = len(GDF[GDF.LAST_ERR == int(self.outFillVal)])
+        self._report_unexpected_errors(GDF)
 
         if not self.q:
             print(f"Found {n_matches} matches.")
