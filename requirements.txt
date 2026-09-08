@@ -18,4 +18,4 @@ scikit-learn
 scipy>=1.7.0
 shapely
 
-fonttools==4.60.2
+fonttools==4.64.0
