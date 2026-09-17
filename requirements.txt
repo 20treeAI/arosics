@@ -15,7 +15,7 @@ pyproj>2.2.0
 py_tools_ds>=0.18.0
 scikit-image>=0.21.0
 scikit-learn
-scipy>=1.7.0
+scipy==1.18.1
 shapely
 
-fonttools==4.64.0
+fonttools==4.65.0
